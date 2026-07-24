@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(claude *)",
+      "PowerShell(ConvertTo-Json *)",
+      "PowerShell($files = @\\(\"$env:USERPROFILE\\\\.claude\\\\settings.json\", \".claude\\\\settings.json\", \".claude\\\\settings.local.json\", \"$env:USERPROFILE\\\\.claude.json\", \".mcp.json\"\\); foreach \\($f in $files\\) { if \\(Test-Path $f\\) { try { Get-Content $f -Raw | ConvertFrom-Json | Out-Null; \"$f : parses OK\" } catch { \"$f : PARSE ERROR - $\\($_.Exception.Message\\)\" } } else { \"$f : not present\" } })",
+      "PowerShell(npm run *)"
+    ]
+  }
+}
