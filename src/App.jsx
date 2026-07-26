@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { extractInventory, describeExtractionError } from './extraction'
+import StocklyAgent from './agent/StocklyAgent'
+import CommandsPanel from './agent/CommandsPanel'
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -15,6 +17,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Terminal,
   Trash2,
   UploadCloud,
 } from 'lucide-react'
@@ -162,6 +165,7 @@ function App() {
   const [contrast, setContrast] = useState(110)
   const [rotation, setRotation] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
+  const [showCommands, setShowCommands] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isDraggingFiles, setIsDraggingFiles] = useState(false)
   const [extracting, setExtracting] = useState(false)
@@ -179,6 +183,7 @@ function App() {
       languageLabel: 'EN',
       history: 'السجل',
       settings: 'الإعدادات',
+      agentCommands: 'أوامر المساعد',
       newBatch: 'دفعة جديدة',
       importDoc: 'استيراد المستند',
       captureTitle: 'التقاط وجمع أوراق الجرد',
@@ -275,6 +280,7 @@ function App() {
       languageLabel: 'AR',
       history: 'History',
       settings: 'Settings',
+      agentCommands: 'Assistant Commands',
       newBatch: 'New Batch',
       importDoc: 'Document Import',
       captureTitle: 'Capture and Collect Inventory Sheets',
@@ -414,7 +420,7 @@ function App() {
   }
 
   const runExtraction = async () => {
-    if (extracting) return
+    if (extracting) return { ok: false, error: 'Extraction already in progress.' }
     setExtractError('')
     setExtracting(true)
     try {
@@ -449,8 +455,17 @@ function App() {
 
       setActiveBatch(nextBatch)
       setBatches((current) => [nextBatch, ...current.filter((batch) => batch.id !== nextBatch.id)])
+
+      return {
+        ok: true,
+        rowCount: nextBatch.rows.length,
+        reviewCount: nextBatch.rows.filter((row) => row.needsReview).length,
+        unparsedRegions: nextBatch.unparsedRegions,
+      }
     } catch (error) {
-      setExtractError(describeExtractionError(error))
+      const message = describeExtractionError(error)
+      setExtractError(message)
+      return { ok: false, error: message }
     } finally {
       setExtracting(false)
     }
@@ -566,6 +581,63 @@ function App() {
     window.print()
   }
 
+  const agentPatchRow = (index, patch) => {
+    setActiveBatch((current) => ({
+      ...current,
+      rows: current.rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)),
+    }))
+  }
+
+  const agentAddRow = (partial) => {
+    const row = {
+      rowIndex: activeBatch.rows.length + 1,
+      itemName: t.itemNew,
+      sku: `SKU-${Date.now()}`,
+      quantity: 1,
+      unit: language === 'ar' ? 'قطعة' : 'piece',
+      condition: language === 'ar' ? 'جيد' : 'Good',
+      status: t.statusNew,
+      notes: '',
+      confidence: 1,
+      needsReview: false,
+      ...partial,
+    }
+
+    setActiveBatch((current) => ({
+      ...current,
+      rows: [...current.rows, row].map((item, rowIndex) => ({ ...item, rowIndex: rowIndex + 1 })),
+    }))
+
+    return row
+  }
+
+  const agentApiRef = useRef(null)
+  agentApiRef.current = {
+    getState: () => ({
+      language,
+      activeBatch,
+      batches,
+      stats,
+      settings,
+      uploadedFiles,
+      extracting,
+      modelOptions: MODEL_OPTIONS,
+    }),
+    setLanguage,
+    setDrawerOpen,
+    setShowSettings,
+    setModel: (model) => setSettings((current) => ({ ...current, model })),
+    createNewBatch,
+    saveCurrentBatch,
+    loadBatch,
+    runExtraction,
+    exportWorkbook,
+    exportPdf,
+    patchRow: agentPatchRow,
+    addRow: agentAddRow,
+    deleteRow,
+  }
+
   
 
   
@@ -607,6 +679,10 @@ function App() {
             <button className="ghost-btn" onClick={() => setDrawerOpen(true)}>
               <History size={16} />
               {t.history}
+            </button>
+            <button className="ghost-btn" onClick={() => setShowCommands(true)}>
+              <Terminal size={16} />
+              {t.agentCommands}
             </button>
             <button className="ghost-btn" onClick={() => setShowSettings(true)}>
               <Settings size={16} />
@@ -919,7 +995,9 @@ function App() {
         </div>
       )}
 
-      
+      {showCommands && <CommandsPanel language={language} onClose={() => setShowCommands(false)} />}
+
+      <StocklyAgent apiRef={agentApiRef} language={language} />
     </div>
   )
 }

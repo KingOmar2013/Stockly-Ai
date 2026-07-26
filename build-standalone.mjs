@@ -37,7 +37,9 @@ const result = await build({
 // Escaping "</script" keeps a stray closing tag inside a JS string from ending
 // the inline <script> block early. Harmless everywhere else in JS.
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script')
-const css = readFileSync(join(srcDir, 'index.css'), 'utf8') + '\n' + readFileSync(join(srcDir, 'App.css'), 'utf8')
+const css = ['index.css', 'App.css', 'agent/agent.css']
+  .map((file) => readFileSync(join(srcDir, file), 'utf8'))
+  .join('\n')
 
 const html = `<!doctype html>
 <html lang="ar" dir="rtl">

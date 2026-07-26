@@ -8,7 +8,8 @@
     "dev:server": "node --env-file=.env.local server.js",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:standalone": "node --env-file=.env.local build-standalone.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",

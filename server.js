@@ -1,5 +1,8 @@
 import express from 'express'
+import { readFileSync } from 'node:fs'
+import { Readable } from 'node:stream'
 import { Anthropic } from '@anthropic-ai/sdk'
+import { ANTHROPIC_TOOLS } from './src/agent/schema.js'
 
 const app = express()
 app.use(express.json({ limit: '20mb' }))
@@ -105,6 +108,135 @@ app.post('/api/extract', async (req, res) => {
   } catch (error) {
     const message = error?.message || 'Extraction failed.'
     return res.status(502).json({ error: message })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Voice assistant: Claude is the brain, ElevenLabs only does speech in/out.
+// Tools execute in the browser, so this endpoint is stateless — the client
+// holds the transcript and posts the full history each turn.
+// ---------------------------------------------------------------------------
+
+const AGENT_MODEL = process.env.AGENT_MODEL || 'claude-opus-5'
+const AGENT_SYSTEM_PROMPT = readFileSync(new URL('./scripts/agent-prompt.txt', import.meta.url), 'utf8').trim()
+
+app.post('/api/agent/chat', async (req, res) => {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return res.status(500).json({ error: 'The server is missing ANTHROPIC_API_KEY.' })
+  }
+
+  const { messages = [], language = 'en' } = req.body || {}
+  if (!Array.isArray(messages) || !messages.length) {
+    return res.status(400).json({ error: 'messages is required.' })
+  }
+
+  try {
+    const client = new Anthropic({ apiKey })
+    const response = await client.beta.messages.create({
+      model: AGENT_MODEL,
+      max_tokens: 8192,
+      system: `${AGENT_SYSTEM_PROMPT}\n\nThe interface language is currently "${language}".`,
+      // Voice replies are spoken aloud: low effort keeps latency down while
+      // leaving adaptive thinking on, which keeps tool calls well-formed.
+      output_config: { effort: 'low' },
+      // Claude Opus 5 safety classifiers can decline a request; route those to
+      // Anthropic's recommended fallback instead of failing the turn.
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      tools: ANTHROPIC_TOOLS,
+      messages,
+    })
+
+    if (response.stop_reason === 'refusal') {
+      return res.status(400).json({ error: 'The model declined this request.' })
+    }
+
+    return res.json({
+      stopReason: response.stop_reason,
+      content: response.content,
+      model: response.model,
+    })
+  } catch (error) {
+    const status = error?.status && error.status >= 400 && error.status < 600 ? error.status : 502
+    return res.status(status).json({ error: error?.message || 'The assistant is unavailable.' })
+  }
+})
+
+// Speech to text. Body is the raw recorded audio blob from the browser.
+app.post('/api/agent/stt', express.raw({ type: 'audio/*', limit: '25mb' }), async (req, res) => {
+  const apiKey = process.env.ELEVENLABS_API_KEY
+  if (!apiKey) return res.status(500).json({ error: 'The server is missing ELEVENLABS_API_KEY.' })
+  if (!req.body?.length) return res.status(400).json({ error: 'No audio received.' })
+
+  try {
+    const form = new FormData()
+    const type = req.get('content-type') || 'audio/webm'
+    const extension = (type.split(';')[0].split('/')[1] || 'webm').replace('mpeg', 'mp3')
+    form.append('file', new Blob([req.body], { type }), `speech.${extension}`)
+    form.append('model_id', 'scribe_v1')
+
+    // Without a hint Scribe guesses from the audio and misreads short Arabic
+    // clips as other scripts. The UI language is the best hint we have.
+    const hint = String(req.query.language || '').toLowerCase()
+    if (hint.startsWith('ar')) form.append('language_code', 'ara')
+    else if (hint.startsWith('en')) form.append('language_code', 'eng')
+
+    const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey },
+      body: form,
+    })
+    const body = await response.json()
+    if (!response.ok) {
+      return res.status(response.status).json({ error: body?.detail?.message || 'Transcription failed.' })
+    }
+    return res.json({ text: (body.text || '').trim(), language: body.language_code || '' })
+  } catch (error) {
+    return res.status(502).json({ error: error?.message || 'Transcription failed.' })
+  }
+})
+
+// Text to speech. Streams mp3 straight back to the browser.
+app.post('/api/agent/tts', async (req, res) => {
+  const apiKey = process.env.ELEVENLABS_API_KEY
+  // Per-language voices fall back to ELEVENLABS_VOICE_ID when unset, so one
+  // variable still works for both languages.
+  const language = String(req.body?.language || '').toLowerCase()
+  const perLanguage = language.startsWith('ar')
+    ? process.env.ELEVENLABS_VOICE_ID_AR
+    : language.startsWith('en')
+      ? process.env.ELEVENLABS_VOICE_ID_EN
+      : ''
+  const voiceId = perLanguage || process.env.ELEVENLABS_VOICE_ID
+  if (!apiKey || !voiceId) {
+    return res.status(500).json({ error: 'The server is missing ELEVENLABS_API_KEY or ELEVENLABS_VOICE_ID.' })
+  }
+
+  const text = String(req.body?.text || '').trim()
+  if (!text) return res.status(400).json({ error: 'text is required.' })
+
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+      {
+        method: 'POST',
+        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+        // flash v2.5 is the low-latency multilingual model; it covers Arabic.
+        body: JSON.stringify({ text, model_id: process.env.ELEVENLABS_TTS_MODEL || 'eleven_flash_v2_5' }),
+      },
+    )
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}))
+      return res.status(response.status).json({ error: body?.detail?.message || 'Speech synthesis failed.' })
+    }
+
+    res.setHeader('Content-Type', 'audio/mpeg')
+    res.setHeader('Cache-Control', 'no-store')
+    return Readable.fromWeb(response.body).pipe(res)
+  } catch (error) {
+    return res.status(502).json({ error: error?.message || 'Speech synthesis failed.' })
   }
 })
 
