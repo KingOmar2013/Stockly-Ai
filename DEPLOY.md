@@ -1,5 +1,40 @@
 # Deploying Stockly so teammates can use it
 
+## Recommended: Netlify (page and API together)
+
+Netlify runs the API as a serverless function on the same origin as the page, so there is
+no second service, no `VITE_API_BASE`, and no CORS. [netlify.toml](netlify.toml) already
+configures the build, the function, and the `/api/*` rewrite.
+
+1. https://app.netlify.com/start → **Import from Git** → pick `Stockly-Ai`.
+   Leave the build settings alone; Netlify reads them from `netlify.toml`.
+2. **Site configuration → Environment variables**, add:
+
+   | Key | Value |
+   | --- | --- |
+   | `ANTHROPIC_API_KEY` | your Anthropic key |
+   | `ELEVENLABS_API_KEY` | your ElevenLabs key |
+   | `ELEVENLABS_VOICE_ID` | `nPczCjzI2devNBz1zQrb` |
+   | `AGENT_MODEL` | `claude-opus-5` |
+   | `ELEVENLABS_TTS_MODEL` | `eleven_flash_v2_5` |
+
+3. **Deploy**. When it finishes, open `https://<your-site>.netlify.app/api/health` —
+   it must return `{"ok":true}`. Then share the site URL.
+
+Nothing else to rebuild: the page calls `/api/*` on its own origin.
+
+### Netlify limits worth knowing
+
+- Functions time out at **60s**. Assistant turns take a few seconds; a large multi-page
+  OCR extraction is the only thing that could approach it.
+- Request and response bodies cap at **6 MB** (~4.5 MB for binary after base64 encoding).
+  Voice clips are tens of KB, but a batch of several full-resolution sheet photos can
+  exceed it — upload 2–3 images at a time if extraction fails on a big batch.
+
+---
+
+## Alternative: GitHub Pages + a separate API host
+
 The site is two halves:
 
 | Half | Where it runs | Status |

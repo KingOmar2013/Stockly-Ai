@@ -1,6 +1,8 @@
 import express from 'express'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Readable } from 'node:stream'
+import { fileURLToPath } from 'node:url'
 import { Anthropic } from '@anthropic-ai/sdk'
 import { ANTHROPIC_TOOLS } from './src/agent/schema.js'
 
@@ -264,7 +266,13 @@ app.post('/api/agent/tts', async (req, res) => {
   }
 })
 
-const port = Number(process.env.PORT || 3001)
-app.listen(port, () => {
-  console.log(`Stockly OCR proxy listening on http://localhost:${port}`)
-})
+// The Netlify function imports `app` and wraps it; only listen when this file
+// is executed directly (local dev, or a plain Node host such as Render).
+export { app }
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const port = Number(process.env.PORT || 3001)
+  app.listen(port, () => {
+    console.log(`Stockly API listening on http://localhost:${port}`)
+  })
+}

@@ -1,0 +1,22 @@
+# Netlify serves the built page and runs the API as a function on the same
+# origin, so the browser needs no VITE_API_BASE and no CORS.
+
+[build]
+  command = "node build-standalone.mjs && node scripts/prepare-dist.mjs"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Every /api/* call reaches the Express app unchanged.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/api/:splat"
+  status = 200
+  force = true
+
+[functions]
+  node_bundler = "esbuild"
+  # server.js reads the system prompt from disk at startup.
+  included_files = ["scripts/agent-prompt.txt"]
