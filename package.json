@@ -10,7 +10,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "build:standalone": "node --env-file=.env.local build-standalone.mjs",
-    "start": "node server.js"
+    "start": "node server.js",
+    "demo": "node build-standalone.mjs && node scripts/prepare-dist.mjs && node --env-file=.env.local server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",

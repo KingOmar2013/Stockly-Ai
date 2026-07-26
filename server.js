@@ -1,5 +1,5 @@
 import express from 'express'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
@@ -265,6 +265,12 @@ app.post('/api/agent/tts', async (req, res) => {
     return res.status(502).json({ error: error?.message || 'Speech synthesis failed.' })
   }
 })
+
+// Serve the built page from the same origin when it exists, so `npm run demo`
+// is a single process on a single port — no Vite, no proxy, no CORS. Declared
+// after the API routes so it never shadows them.
+const distDir = fileURLToPath(new URL('./dist/', import.meta.url))
+if (existsSync(distDir)) app.use(express.static(distDir))
 
 // The Netlify function imports `app` and wraps it; only listen when this file
 // is executed directly (local dev, or a plain Node host such as Render).
