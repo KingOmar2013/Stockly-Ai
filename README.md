@@ -11,6 +11,10 @@ Stockly AI is a bilingual inventory digitization workspace for Arabic and Englis
 - Google Sign-In based Google Sheets selection and sync flow
 - Voice-call and text assistant powered by Claude, driving the app through in-code tools (see [AGENT.md](AGENT.md))
 
+## Deploy
+
+See [DEPLOY.md](DEPLOY.md) — the page is on GitHub Pages, the API needs a Node host.
+
 ## Run locally
 
 1. Install dependencies:

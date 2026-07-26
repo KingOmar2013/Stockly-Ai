@@ -9,7 +9,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "build:standalone": "node --env-file=.env.local build-standalone.mjs"
+    "build:standalone": "node --env-file=.env.local build-standalone.mjs",
+    "start": "node server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",
@@ -26,5 +27,8 @@
     "@vitejs/plugin-react": "^5.0.0",
     "oxlint": "^1.71.0",
     "vite": "^7.1.0"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

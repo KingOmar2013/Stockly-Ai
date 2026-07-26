@@ -1,0 +1,25 @@
+# One-click deploy of the API server. Render reads this automatically when you
+# create a Blueprint from this repository. The two `sync: false` keys are
+# prompted for at deploy time and stored by Render, never committed here.
+services:
+  - type: web
+    name: stockly-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: AGENT_MODEL
+        value: claude-opus-5
+      - key: ELEVENLABS_VOICE_ID
+        value: nPczCjzI2devNBz1zQrb
+      - key: ELEVENLABS_TTS_MODEL
+        value: eleven_flash_v2_5
+      - key: ALLOWED_ORIGIN
+        value: https://kingomar2013.github.io
