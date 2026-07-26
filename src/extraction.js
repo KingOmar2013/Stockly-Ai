@@ -1,3 +1,4 @@
+import { apiUrl } from './agent/net.js'
 const MAX_IMAGE_EDGE = 2576
 
 async function preprocessImage(file, { brightness = 100, contrast = 100, rotation = 0 }) {
@@ -48,7 +49,7 @@ export async function extractInventory({ apiKey, model, files, adjustments = {} 
 
   const imageBlocks = await Promise.all(supported.map((file) => preprocessImage(file, adjustments)))
 
-  const response = await fetch('/api/extract', {
+  const response = await fetch(apiUrl('/api/extract'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: model || 'claude-haiku-4-5', imageBlocks, supportedCount: supported.length }),

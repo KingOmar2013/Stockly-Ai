@@ -29,6 +29,10 @@ const result = await build({
   loader: { '.css': 'empty' }, // App.jsx imports App.css; ignore here, inlined as <style>
   define: {
     'import.meta.env.VITE_ANTHROPIC_API_KEY': '""',
+    // The deployed page is static, so it must call the API server by absolute
+    // URL. Set VITE_API_BASE before running this script, e.g.
+    //   VITE_API_BASE=https://stockly-api.onrender.com node build-standalone.mjs
+    'import.meta.env.VITE_API_BASE': JSON.stringify(process.env.VITE_API_BASE ?? ''),
     'process.env.NODE_ENV': '"production"',
   },
   write: false,

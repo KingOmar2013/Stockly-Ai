@@ -77,6 +77,21 @@ Adding a command means editing two files: describe it in `catalog.js`, implement
 
 ## Deployment
 
-`/api/*` needs a running server, so the static GitHub Pages bundle has no assistant and no
-extraction — that limitation predates this work (`/api/extract` has the same dependency).
-To ship it, host `server.js` (Cloudflare Worker, Vercel, Fly) and point the frontend at it.
+GitHub Pages is a static host: it cannot run `server.js`, so every POST to `/api/*` there
+returns **405**. The assistant and OCR extraction both need the API running somewhere that
+executes Node.
+
+1. Deploy `server.js` (Render, Railway, Fly, or a Vercel serverless function) with
+   `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, and
+   `ALLOWED_ORIGIN=https://<user>.github.io` set in the host's environment.
+2. Rebuild the static page pointing at it:
+
+   ```
+   VITE_API_BASE=https://your-api-host node build-standalone.mjs
+   ```
+
+3. Commit the regenerated `index.html` and push.
+
+`GET /api/health` returns `{"ok":true}` — check that first to confirm the API host is up
+before debugging the page. Locally `VITE_API_BASE` stays empty and the Vite dev proxy
+forwards `/api` to port 3001, so nothing changes for development.

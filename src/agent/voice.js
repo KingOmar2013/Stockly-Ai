@@ -1,4 +1,4 @@
-import { describeFetchError } from './net.js'
+import { apiUrl, describeFetchError, describeHttpError } from './net.js'
 
 const SPEECH_RMS = 0.02 // above this counts as speech
 const SILENCE_MS = 900 // trailing silence that closes an utterance
@@ -50,13 +50,13 @@ export function createVoice({ onTranscript, getLanguage = () => 'en', onError = 
   async function transcribe(blob) {
     if (blob.size < 2000) return
     try {
-      const response = await fetch(`/api/agent/stt?language=${encodeURIComponent(getLanguage())}`, {
+      const response = await fetch(apiUrl(`/api/agent/stt?language=${encodeURIComponent(getLanguage())}`), {
         method: 'POST',
         headers: { 'Content-Type': blob.type || 'audio/webm' },
         body: blob,
       })
       const body = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(body.error || `Transcription failed (HTTP ${response.status}).`)
+      if (!response.ok) throw new Error(describeHttpError(response.status, body.error, 'Transcription failed.'))
       const text = (body.text || '').trim()
       if (text) onTranscript(text)
     } catch (error) {
@@ -144,14 +144,14 @@ export function createVoice({ onTranscript, getLanguage = () => 'en', onError = 
       if (!trimmed) return
       stopPlayback()
       try {
-        const response = await fetch('/api/agent/tts', {
+        const response = await fetch(apiUrl('/api/agent/tts'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: trimmed, language: getLanguage() }),
         })
         if (!response.ok) {
           const body = await response.json().catch(() => ({}))
-          throw new Error(body.error || `Speech synthesis failed (HTTP ${response.status}).`)
+          throw new Error(describeHttpError(response.status, body.error, 'Speech synthesis failed.'))
         }
         if (closed) return
 

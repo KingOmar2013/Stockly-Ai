@@ -5,6 +5,30 @@ import { Anthropic } from '@anthropic-ai/sdk'
 import { ANTHROPIC_TOOLS } from './src/agent/schema.js'
 
 const app = express()
+
+// When the frontend is served from a static host (GitHub Pages) it calls this
+// server cross-origin. ALLOWED_ORIGIN is a comma-separated allowlist; unset
+// means same-origin only, which is what local development uses.
+const allowedOrigins = (process.env.ALLOWED_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+app.use((req, res, next) => {
+  const origin = req.get('origin')
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    res.setHeader('Access-Control-Max-Age', '86400')
+  }
+  if (req.method === 'OPTIONS') return res.sendStatus(origin && allowedOrigins.includes(origin) ? 204 : 403)
+  return next()
+})
+
+app.get('/api/health', (_req, res) => res.json({ ok: true }))
+
 app.use(express.json({ limit: '20mb' }))
 
 const EXTRACTION_SCHEMA = {

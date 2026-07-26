@@ -1,4 +1,4 @@
-import { describeFetchError } from './net.js'
+import { apiUrl, describeFetchError, describeHttpError } from './net.js'
 
 const MAX_TOOL_ROUNDS = 8
 const MAX_HISTORY_TURNS = 24
@@ -40,13 +40,13 @@ export function createBrain({ tools, getLanguage = () => 'en', onEvent = () => {
   }
 
   async function turn() {
-    const response = await fetch('/api/agent/chat', {
+    const response = await fetch(apiUrl('/api/agent/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: history, language: getLanguage() }),
     })
     const body = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(body.error || `The assistant is unavailable (HTTP ${response.status}).`)
+    if (!response.ok) throw new Error(describeHttpError(response.status, body.error, 'The assistant is unavailable.'))
     return body
   }
 
