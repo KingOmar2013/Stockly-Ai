@@ -144,6 +144,11 @@ app.post('/api/extract', async (req, res) => {
 // ---------------------------------------------------------------------------
 
 const AGENT_MODEL = process.env.AGENT_MODEL || 'claude-opus-5'
+
+// Not every model accepts every parameter: `effort` is rejected by Haiku 4.5,
+// and server-side refusal fallbacks exist only on the Opus 5 / Fable 5 tier.
+const SUPPORTS_EFFORT = !/^claude-haiku/.test(AGENT_MODEL)
+const SUPPORTS_FALLBACKS = /^claude-(opus-5|fable-5|mythos-5)/.test(AGENT_MODEL)
 const AGENT_SYSTEM_PROMPT = readFileSync(new URL('./scripts/agent-prompt.txt', import.meta.url), 'utf8').trim()
 
 app.post('/api/agent/chat', async (req, res) => {
@@ -165,11 +170,12 @@ app.post('/api/agent/chat', async (req, res) => {
       system: `${AGENT_SYSTEM_PROMPT}\n\nThe interface language is currently "${language}".`,
       // Voice replies are spoken aloud: low effort keeps latency down while
       // leaving adaptive thinking on, which keeps tool calls well-formed.
-      output_config: { effort: 'low' },
-      // Claude Opus 5 safety classifiers can decline a request; route those to
-      // Anthropic's recommended fallback instead of failing the turn.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      // Haiku 4.5 rejects the effort parameter outright.
+      ...(SUPPORTS_EFFORT ? { output_config: { effort: 'low' } } : {}),
+      // Opus 5 / Fable 5 safety classifiers can decline a request; route those
+      // to Anthropic's recommended fallback instead of failing the turn. Other
+      // models have no fallback chain and reject the parameter.
+      ...(SUPPORTS_FALLBACKS ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
       tools: ANTHROPIC_TOOLS,
       messages,
     })
