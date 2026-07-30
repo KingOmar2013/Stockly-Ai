@@ -1,6 +1,12 @@
 import { apiUrl, describeFetchError, describeHttpError } from './net.js'
 
 const SPEECH_RMS = 0.02 // above this counts as speech
+// Barge-in runs against the assistant's own voice leaking from the speakers, so
+// it needs a much higher bar than plain speech detection: loud, sustained, and
+// not in the first moments of playback.
+const BARGE_IN_RMS = 0.09
+const BARGE_IN_MS = 350
+const BARGE_IN_GRACE_MS = 600
 const SILENCE_MS = 900 // trailing silence that closes an utterance
 const MIN_UTTERANCE_MS = 350 // ignore coughs and door slams
 const FRAME_MS = 50
@@ -23,6 +29,8 @@ export function createVoice({ onTranscript, getLanguage = () => 'en', onError = 
   let frameTimer = null
   let audio = null
   let speaking = false
+  let speakingSince = 0
+  let bargeMs = 0
   let listening = false
   let closed = false
 
@@ -44,7 +52,20 @@ export function createVoice({ onTranscript, getLanguage = () => 'en', onError = 
     URL.revokeObjectURL(audio.src)
     audio = null
     speaking = false
+    bargeMs = 0
+    resumeCapture()
     onState({ speaking: false })
+  }
+
+  // The microphone keeps running while the assistant talks so barge-in can be
+  // heard, but recording is paused — otherwise the reply lands in the next
+  // utterance and gets transcribed back to the model.
+  function pauseCapture() {
+    if (recorder?.state === 'recording') recorder.pause()
+  }
+
+  function resumeCapture() {
+    if (recorder?.state === 'paused') recorder.resume()
   }
 
   async function transcribe(blob) {
@@ -90,11 +111,21 @@ export function createVoice({ onTranscript, getLanguage = () => 'en', onError = 
 
     frameTimer = setInterval(() => {
       const level = rms()
-      const loud = level > SPEECH_RMS
 
-      if (loud) {
-        // Barge-in: the user talking over the reply cancels it.
-        if (speaking) stopPlayback()
+      if (speaking) {
+        // The assistant's own voice is coming back through the microphone, so
+        // only a loud, sustained interruption counts — and never in the first
+        // moments, when the speakers are loudest relative to the room.
+        const elapsed = performance.now() - speakingSince
+        bargeMs = level > BARGE_IN_RMS ? bargeMs + FRAME_MS : 0
+        if (bargeMs >= BARGE_IN_MS && elapsed > BARGE_IN_GRACE_MS) {
+          stopPlayback()
+          bargeMs = 0
+        }
+        return
+      }
+
+      if (level > SPEECH_RMS) {
         heardSpeech = true
         speechMs += FRAME_MS
         silenceMs = 0
@@ -158,12 +189,16 @@ export function createVoice({ onTranscript, getLanguage = () => 'en', onError = 
         const url = URL.createObjectURL(await response.blob())
         audio = new Audio(url)
         speaking = true
+        speakingSince = performance.now()
+        bargeMs = 0
+        pauseCapture()
         onState({ speaking: true })
         audio.onended = stopPlayback
         audio.onerror = stopPlayback
         await audio.play()
       } catch (error) {
         speaking = false
+        resumeCapture()
         onState({ speaking: false })
         onError(describeFetchError(error, 'Speech synthesis failed.'))
       }
