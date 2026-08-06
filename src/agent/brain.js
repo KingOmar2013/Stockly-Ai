@@ -24,18 +24,18 @@ export function createBrain({ tools, getLanguage = () => 'en', onEvent = () => {
   let history = []
   let busy = false
 
+  // A trimmed history has to begin on a plain user turn: the API rejects a
+  // conversation that opens with an assistant message, and it rejects a
+  // tool_result whose matching tool_use was dropped. Advance past both.
+  const isSafeStart = (message) =>
+    message.role === 'user' &&
+    !(Array.isArray(message.content) && message.content.some((block) => block.type === 'tool_result'))
+
   const trim = () => {
     if (history.length <= MAX_HISTORY_TURNS) return
-    // Drop from the front, but never leave a tool_result as the first message —
-    // Claude rejects a tool_result whose tool_use is no longer in history.
     let cut = history.length - MAX_HISTORY_TURNS
-    while (
-      cut < history.length &&
-      Array.isArray(history[cut].content) &&
-      history[cut].content.some((block) => block.type === 'tool_result')
-    ) {
-      cut += 1
-    }
+    while (cut < history.length && !isSafeStart(history[cut])) cut += 1
+    if (cut >= history.length) return // nothing safe to cut to; keep the history
     history = history.slice(cut)
   }
 

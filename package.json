@@ -12,10 +12,12 @@
     "build:standalone": "node --env-file=.env.local build-standalone.mjs",
     "start": "node server.js",
     "demo": "node build-standalone.mjs && node scripts/prepare-dist.mjs && node --env-file=.env.local server.js",
-    "vercel-build": "node build-standalone.mjs && node scripts/prepare-dist.mjs"
+    "vercel-build": "node build-standalone.mjs && node scripts/prepare-dist.mjs",
+    "test": "node scripts/selftest.mjs && node scripts/selftest-voice.mjs && node scripts/check-bundle.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",
+    "@vercel/analytics": "^2.0.1",
     "express": "^5.2.1",
     "lucide-react": "^1.26.0",
     "react": "^19.2.7",

@@ -3,7 +3,17 @@
  * dev proxy provides locally. For a static deploy (GitHub Pages) this must point
  * at the host running server.js, e.g. https://stockly-api.onrender.com
  */
-export const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
+// The bare `import.meta.env.VITE_API_BASE` expression is what the build
+// replaces, so it has to survive verbatim — but it throws outside a bundler
+// (plain Node, tests), where an empty base is the right answer anyway.
+let configuredBase = ''
+try {
+  configuredBase = import.meta.env.VITE_API_BASE || ''
+} catch {
+  configuredBase = ''
+}
+
+export const API_BASE = configuredBase.replace(/\/$/, '')
 
 export const apiUrl = (path) => `${API_BASE}${path}`
 
